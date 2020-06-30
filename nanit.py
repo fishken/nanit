@@ -6,6 +6,7 @@ raw_data_df = pd.json_normalize(raw_data['Order'], max_level=0)
 raw_data_df['OrderId'] = raw_data_df['OrderId'].astype('int64')
 raw_data_df['ShippingAddressId']=None
 
+##json parsing, df creation
 shipping_addresses = pd.DataFrame()
 for index, order in raw_data_df.iterrows():
     shipping_address = order['ShippingAddress']
@@ -35,6 +36,8 @@ for index, dispatch in dispatches_raw.iterrows():
 
 dispatch_lines = dispatch_lines.explode('SerialNumbers')
 dispatch_lines['Quantity'] = dispatch_lines['Quantity'].astype('int64')
+
+##upload to mysql
 
 sqlEngine = create_engine(
     'mysql+pymysql://nanit1111:nanit1111@nanit.chhrtv1dhb8f.us-east-2.rds.amazonaws.com:3306/orders')
