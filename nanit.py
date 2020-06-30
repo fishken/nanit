@@ -6,7 +6,6 @@ raw_data_df = pd.json_normalize(raw_data['Order'], max_level=0)
 raw_data_df['OrderId'] = raw_data_df['OrderId'].astype('int64')
 raw_data_df['ShippingAddressId']=None
 
-##json parsing, df creation
 shipping_addresses = pd.DataFrame()
 for index, order in raw_data_df.iterrows():
     shipping_address = order['ShippingAddress']
@@ -36,22 +35,39 @@ for index, dispatch in dispatches_raw.iterrows():
 
 dispatch_lines = dispatch_lines.explode('SerialNumbers')
 dispatch_lines['Quantity'] = dispatch_lines['Quantity'].astype('int64')
+dispatch_lines.reset_index(inplace=True)
+dispatch_lines.rename(columns={'index': 'DispatchLineId'}, inplace=True)
 
-##upload to mysql
+products = pd.concat([dispatch_lines[['ProductCode','ProductDescription']] \
+                        ,dispatch_lines[['ProductCode','ProductDescription']]]) \
+                        .drop_duplicates().reset_index(drop=True)
+products.reset_index(inplace=True)
+products.rename(columns={'index':'ProductId'}, inplace=True)
+
+dispatch_lines = pd.merge(dispatch_lines, products,  how='left', left_on=['ProductCode','ProductDescription'], right_on = ['ProductCode','ProductDescription'])
+dispatch_lines = dispatch_lines.drop(['ProductCode','ProductDescription'], axis =1)
+
+order_lines = pd.merge(order_lines, products,  how='left', left_on=['ProductCode','ProductDescription'], right_on = ['ProductCode','ProductDescription'])
+order_lines = order_lines.drop(['ProductCode','ProductDescription'], axis =1)
+order_lines['ProductId'].fillna(99999999, inplace = True)
 
 sqlEngine = create_engine(
     'mysql+pymysql://nanit1111:nanit1111@nanit.chhrtv1dhb8f.us-east-2.rds.amazonaws.com:3306/orders')
 sqlEngine.connect()
 
-tables_list = ['dispatch_lines', 'dispatches', 'shipping_addresses', 'order_lines', 'orders']
+tables_list = ['dispatch_lines', 'dispatches', 'shipping_addresses', 'order_lines', 'orders', 'products']
 for table in tables_list:
     drop_table = "DROP TABLE IF EXISTS {};".format(table)
     sqlEngine.execute(drop_table)
 
 metadata = MetaData()
-sqlEngine.execute('drop table if exists dispatches')
-sqlEngine.execute('drop table if exists orders')
-sqlEngine.execute('drop table if exists shipping_addresses')
+
+products_table = Table('products', metadata,
+                       #    Column('ProductId', BigInteger(), primary_key=True),
+                       Column('ProductId', Integer()),
+                       Column('ProductCode', String(20)),
+                       Column('ProductDescription', String(20))
+                       )
 
 orders_table = Table('orders', metadata,
                      Column('OrderId', BigInteger(), primary_key=True),
@@ -90,21 +106,22 @@ shipping_addresses_table = Table('shipping_addresses', metadata,
 order_lines_table = Table('order_lines', metadata,
                           # Column('OrderLineId', Integer(), primary_key=True),
                           Column('OrderLineId', Integer()),
-                          Column('ProductCode', String(6)),
-                          Column('ProductDescription', String(30)),
                           Column('Quantity', Integer()),
                           Column('UnitCost', Float(7, 2)),
+                          Column('ProductId', Integer()),
+                          # Column('ProductId', ForeignKey('products.ProductId')),
                           Column('OrderId', ForeignKey('orders.OrderId'))
                           )
 
 dispatch_lines_table = Table('dispatch_lines', metadata,
-                             # Column('SerialNumbers', String(20), primary_key=True),
+                             # Column('DispatchLineId', BigInteger(), primary_key=True),
+                             Column('DispatchLineId', Integer()),
                              Column('SerialNumbers', String(20)),
-                             Column('ProductCode', String(6)),
-                             Column('ProductDescription', String(30)),
                              Column('Quantity', Integer()),
-                             # Column('DispatchId', ForeignKey('dispatches.DispatchId')
+                             # Column('ProductId', ForeignKey('products.ProductId')),
+                             Column('ProductId', Integer()),
                              Column('DispatchId', Integer())
+                             # Column('DispatchId', ForeignKey('dispatches.DispatchId'))
 
                              )
 
@@ -113,6 +130,6 @@ metadata.create_all(sqlEngine)
 sqlEngine.execute(insert(orders_table), orders.to_dict(orient='records'))
 sqlEngine.execute(insert(dispatches_table), dispatches.to_dict(orient='records'))
 sqlEngine.execute(insert(shipping_addresses_table), shipping_addresses.to_dict(orient='records'))
-sqlEngine.execute(insert(order_lines_table), order_lines.to_dict(orient='records'))
 sqlEngine.execute(insert(dispatch_lines_table), dispatch_lines.to_dict(orient='records'))
-
+sqlEngine.execute(insert(products_table), products.to_dict(orient='records'))
+sqlEngine.execute(insert(order_lines_table), order_lines.to_dict(orient='records'))
