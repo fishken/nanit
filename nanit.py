@@ -1,6 +1,8 @@
 import pandas as pd
 from sqlalchemy import create_engine, insert, MetaData, Table, String, Column, Text, DateTime, Boolean, Integer, BigInteger, Float, ForeignKey
 
+#json parsing
+
 raw_data = pd.read_json (r'C:\Users\Home\Desktop\Nanit_BI_Test\shippingdata.json')
 raw_data_df = pd.json_normalize(raw_data['Order'], max_level=0)
 raw_data_df['OrderId'] = raw_data_df['OrderId'].astype('int64')
@@ -50,6 +52,8 @@ dispatch_lines = dispatch_lines.drop(['ProductCode','ProductDescription'], axis 
 order_lines = pd.merge(order_lines, products,  how='left', left_on=['ProductCode','ProductDescription'], right_on = ['ProductCode','ProductDescription'])
 order_lines = order_lines.drop(['ProductCode','ProductDescription'], axis =1)
 order_lines['ProductId'].fillna(99999999, inplace = True)
+
+#create tables and upload to mysql
 
 sqlEngine = create_engine(
     'mysql+pymysql://nanit1111:nanit1111@nanit.chhrtv1dhb8f.us-east-2.rds.amazonaws.com:3306/orders')
